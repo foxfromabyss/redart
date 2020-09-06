@@ -22,8 +22,8 @@ var (
 
 // follows pattern {"op": "<command>", "args": ["arg1", "arg2", "arg3"]}
 type BitmexMessage struct {
-	Op   string
-	Args []string
+	Op   string   `json:"op"`
+	Args []string `json:"args"`
 }
 
 func bitmexMessageSubscription(subName string) BitmexMessage {
@@ -41,13 +41,13 @@ func bitmexMessageSubscription(subName string) BitmexMessage {
 var addr = flag.String("addr", "testnet.bitmex.com", "http service address")
 
 func listen() {
-	addSubscribe := make(chan BitmexMessage)
+	addSubscribe := make(chan BitmexMessage, 5)
 	message := bitmexMessageSubscription("orderBookL2_25:XBTUSD")
 	addSubscribe <- message
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	u := url.URL{Scheme: "wss", Host: Address, Path: "/realtime"}
+	u := url.URL{Scheme: "wss", Host: *addr, Path: "/realtime"}
 
 	log.Printf("connecting to %s", u.String())
 
@@ -76,7 +76,8 @@ func listen() {
 		// 	return
 		case msg := <-addSubscribe:
 			data, _ := json.Marshal(msg)
-			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, string(data)))
+			// fmt.Println(string(data))
+			err := c.WriteMessage(websocket.TextMessage, data)
 			if err != nil {
 				log.Println("write close:", err)
 				return
