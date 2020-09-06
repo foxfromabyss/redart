@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/url"
@@ -18,7 +20,30 @@ var (
 	Address      string
 )
 
+// follows pattern {"op": "<command>", "args": ["arg1", "arg2", "arg3"]}
+type BitmexMessage struct {
+	Op   string
+	Args []string
+}
+
+func bitmexMessageSubscription(subName string) BitmexMessage {
+	args := []string{subName}
+	message := BitmexMessage{Op: "subscribe", Args: args}
+	return message
+}
+
+// func (b *BitmexMessage) json() string {
+// 	result := ""
+// 	result = result + "{\"op\": \"" + b.op + "\", "
+// 	return math.Pi * c.r * c.r
+// }
+
+var addr = flag.String("addr", "testnet.bitmex.com", "http service address")
+
 func listen() {
+	addSubscribe := make(chan BitmexMessage)
+	addSubscribe <- bitmexMessageSubscription("orderBookL2_25:XBTUSD")
+
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	u := url.URL{Scheme: "wss", Host: Address, Path: "/realtime"}
@@ -48,6 +73,14 @@ func listen() {
 		select {
 		// case <-done:
 		// 	return
+		case msg := <-addSubscribe:
+			data, _ := json.Marshal(msg)
+			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, string(data)))
+			if err != nil {
+				log.Println("write close:", err)
+				return
+			}
+
 		case <-interrupt:
 			log.Println("interrupt")
 
