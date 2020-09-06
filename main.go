@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net/url"
@@ -16,14 +15,13 @@ import (
 var (
 	BitmexID     string
 	BitmexSecret string
+	Address      string
 )
-
-var addr = flag.String("addr", "testnet.bitmex.com", "http service address")
 
 func listen() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	u := url.URL{Scheme: "wss", Host: *addr, Path: "/realtime"}
+	u := url.URL{Scheme: "wss", Host: Address, Path: "/realtime"}
 
 	log.Printf("connecting to %s", u.String())
 
@@ -67,8 +65,8 @@ func listen() {
 			return
 		}
 	}
-
 }
+
 func init() {
 	err := godotenv.Load()
 	if err != nil {
@@ -76,14 +74,12 @@ func init() {
 	}
 	BitmexID = os.Getenv("BITMEX_ID")
 	BitmexSecret = os.Getenv("BITMEX_SECRET")
+	Address = os.Getenv("BITMEX_ADDRESS")
 }
+
 func main() {
 	fmt.Println(BitmexID)
 	fmt.Println(BitmexSecret)
 
-	// bitmex_secret := os.Getenv("BITMEX_SECRET")
-	// bitmex_id := os.Getenv("BITMEX_ID")
-	// fmt.Println(bitmex_secret)
-	// fmt.Println(bitmex_id)
 	listen()
 }
