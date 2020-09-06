@@ -42,7 +42,8 @@ var addr = flag.String("addr", "testnet.bitmex.com", "http service address")
 
 func listen() {
 	addSubscribe := make(chan BitmexMessage)
-	addSubscribe <- bitmexMessageSubscription("orderBookL2_25:XBTUSD")
+	message := bitmexMessageSubscription("orderBookL2_25:XBTUSD")
+	addSubscribe <- message
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
