@@ -1,106 +1,20 @@
 package main
 
 import (
-	"encoding/json"
-	"flag"
 	"fmt"
+	"github.com/foxfromabyss/redart/bitmex"
+	"github.com/joho/godotenv"
 	"log"
-	"net/url"
 	"os"
 	"os/signal"
-	"time"
-
-	"github.com/gorilla/websocket"
-	"github.com/joho/godotenv"
+	"syscall"
 )
 
 var (
-	BitmexID     string
-	BitmexSecret string
-	Address      string
+	BitmexID      string
+	BitmexSecret  string
+	BitmexAddress string
 )
-
-// follows pattern {"op": "<command>", "args": ["arg1", "arg2", "arg3"]}
-type BitmexMessage struct {
-	Op   string   `json:"op"`
-	Args []string `json:"args"`
-}
-
-func bitmexMessageSubscription(subName string) BitmexMessage {
-	args := []string{subName}
-	message := BitmexMessage{Op: "subscribe", Args: args}
-	return message
-}
-
-// func (b *BitmexMessage) json() string {
-// 	result := ""
-// 	result = result + "{\"op\": \"" + b.op + "\", "
-// 	return math.Pi * c.r * c.r
-// }
-
-var addr = flag.String("addr", "testnet.bitmex.com", "http service address")
-
-func listen() {
-	addSubscribe := make(chan BitmexMessage, 5)
-	message := bitmexMessageSubscription("orderBookL2_25:XBTUSD")
-	addSubscribe <- message
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-	u := url.URL{Scheme: "wss", Host: *addr, Path: "/realtime"}
-
-	log.Printf("connecting to %s", u.String())
-
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-	defer c.Close()
-
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for {
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				return
-			}
-			log.Printf("recv: %s", message)
-		}
-	}()
-	for {
-		select {
-		// case <-done:
-		// 	return
-		case msg := <-addSubscribe:
-			data, _ := json.Marshal(msg)
-			// fmt.Println(string(data))
-			err := c.WriteMessage(websocket.TextMessage, data)
-			if err != nil {
-				log.Println("write close:", err)
-				return
-			}
-
-		case <-interrupt:
-			log.Println("interrupt")
-
-			// Cleanly close the connection by sending a close message and then
-			// waiting (with timeout) for the server to close the connection.
-			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			if err != nil {
-				log.Println("write close:", err)
-				return
-			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-			}
-			return
-		}
-	}
-}
 
 func init() {
 	err := godotenv.Load()
@@ -109,12 +23,29 @@ func init() {
 	}
 	BitmexID = os.Getenv("BITMEX_ID")
 	BitmexSecret = os.Getenv("BITMEX_SECRET")
-	Address = os.Getenv("BITMEX_ADDRESS")
+	BitmexAddress = os.Getenv("BITMEX_ADDRESS")
 }
 
 func main() {
-	fmt.Println(BitmexID)
-	fmt.Println(BitmexSecret)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
-	listen()
+	bitmex.Connect(BitmexID, BitmexSecret, BitmexAddress)
+	bitmex.AddSubscriptionMessageHandler(func(message bitmex.SubscriptionMessage) {
+		fmt.Println(message)
+	})
+	bitmex.Subscribe(bitmex.PairL225XBTUSD)
+
+waitLoop:
+	for {
+		select {
+		case err := <-bitmex.Notify():
+			log.Fatal(err)
+		case sig := <-signals:
+			log.Printf("application stopped (system signal %s)", sig.String())
+			break waitLoop
+		}
+	}
+
+	bitmex.Close()
 }
