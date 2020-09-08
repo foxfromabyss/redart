@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/url"
+	"sync"
 )
 
 var (
@@ -13,10 +14,14 @@ var (
 	errorsChan   chan error
 
 	handlers []SubscriptionMessageHandler
+
+	lock *sync.Mutex
 )
 
 // Connect connects to bitmex websocket API
 func Connect(ID string, Secret string, Address string) {
+	lock = &sync.Mutex{}
+
 	addSubscribe = make(chan Message)
 	errorsChan = make(chan error)
 
@@ -47,9 +52,11 @@ func Connect(ID string, Secret string, Address string) {
 				log.Println("unmarshal:", err)
 			}
 
+			lock.Lock()
 			for _, handler := range handlers {
 				handler(message)
 			}
+			lock.Unlock()
 		}
 	}()
 
@@ -98,5 +105,7 @@ func Subscribe(pair Pair) {
 
 // AddSubscriptionMessageHandler adds handler which will be called back on each SubscriptionMessage
 func AddSubscriptionMessageHandler(handler SubscriptionMessageHandler) {
+	lock.Lock()
 	handlers = append(handlers, handler)
+	lock.Unlock()
 }
